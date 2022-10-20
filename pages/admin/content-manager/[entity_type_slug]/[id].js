@@ -207,8 +207,6 @@ export default function Type({cache}) {
           
         </div>
 
-       
-     
          </div>
          <AppInfoModal show={state.show} onClose={() => (dispatch({type: SET_SHOW, payload: false}),router.push(`/admin/content-manager/${entity_type_slug}`) )} modalTitle='Success' buttonTitle='Close'> You have successfully deleted the entry. </AppInfoModal>
       </InnerLayout>
