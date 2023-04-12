@@ -1,5 +1,8 @@
 import CacheContext from "@/components/contexts/CacheContext";
+
 import { getSessionCache } from "@klaudsol/commons/lib/Session";
+import { useClientErrorHandler } from "@/components/hooks";
+
 import { useRouter } from "next/router";
 import { useEffect, useReducer, useRef } from "react";
 import { sortByOrderAsc } from "@/components/Util";
@@ -22,6 +25,8 @@ import {
 } from "@/lib/actions";
 import { FaCheck } from "react-icons/fa";
 import { DEFAULT_SKELETON_ROW_COUNT, writeContents } from "lib/Constants";
+import { getAllFiles, getNonFiles, getBody } from "@/lib/s3FormController";
+import { uploadFilesToUrl } from "@/backend/data_access/S3";
 import { redirectToManagerEntitySlug } from "@/components/klaudsolcms/routers/routersRedirect";
 import classname from "classnames";
 import AppBackButton from "@/components/klaudsolcms/buttons/AppBackButton";
@@ -36,6 +41,7 @@ import { RiQuestionLine } from "react-icons/ri";
 
 export default function CreateNewEntry({ cache }) {
   const router = useRouter();
+  const errorHandler = useClientErrorHandler();
   const capabilities = cache?.capabilities;
 
   const { entity_type_slug } = router.query;
@@ -73,7 +79,7 @@ export default function CreateNewEntry({ cache }) {
           payload: values.metadata.entity_type_id,
         });
       } catch (ex) {
-        console.error(ex.stack);
+        errorHandler(ex);
       } finally {
         dispatch({ type: CLEANUP });
       }
@@ -108,24 +114,32 @@ export default function CreateNewEntry({ cache }) {
       (async () => {
         const { slug } = values;
         const formattedSlug = formatSlug(slug);
+        const { files, data, fileNames } = await getBody(values);
 
         const entry = {
-          ...values,
+          ...data,
+          fileNames,
           slug: formattedSlug,
           entity_type_id: state.entity_type_id,
         };
-        
-        const formattedEntries = convertToFormData(entry);
+
         try {
           dispatch({ type: SAVING });
+
           const response = await slsFetch(`/api/${entity_type_slug}`, {
             method: "POST",
-            body: formattedEntries,
+            headers: {
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(entry),
           });
-          const { message, homepage } = await response.json();
+          const { message, presignedUrls } = await response.json();
+            
+          if (files.length > 0) await uploadFilesToUrl(files, presignedUrls);
+
           dispatch({ type: SET_SHOW, payload: true });
         } catch (ex) {
-          console.error(ex);
+          errorHandler(ex);
         } finally {
           dispatch({ type: CLEANUP });
         }

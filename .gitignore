@@ -35,10 +35,19 @@ yarn-error.log*
 .env.development.local
 .env.test.local
 .env.production.local
+.env.*
 
 # vercel
 .vercel
 
 # we only use yarn.lock
 package-lock.json
+
+# klaudsol plugins
+plugins/*
+!plugins/README.md
+pages/plugins/*
+!pages/plugins/README.md
+pages/api/plugins/*
+!pages/api/plugins/README.md
 
