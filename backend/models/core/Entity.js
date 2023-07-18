@@ -1,5 +1,6 @@
 import DB from '@klaudsol/commons/lib/DB';
 import { isNumber, generateSQL } from "@/components/Util";
+import RecordNotFound from '@klaudsol/commons/errors/RecordNotFound';
 
 class Entity {
   static async findBySlugOrId({ entity_type_slug, slug }) {
@@ -14,13 +15,14 @@ class Entity {
     // if the type of slug is a number, propertyType and conditionType will be longValue and enitities.id respectively,
     // and will be used for the query's condition WHERE and property name for "slug" in the map method
 
-    const sql = `SELECT entities.id, entity_types.id, entity_types.name, entity_types.slug, entities.slug, 
-                  attributes.name, attributes.type, attributes.\`order\`,
+    const sql = `SELECT entities.id, entities.slug, entities.status, entity_types.id, entity_types.name, entity_types.slug,
+                  attributes.name, attributes.type, attributes.\`order\`, attributes.custom_name,
                   \`values\`.value_string, 
                   \`values\`.value_long_string, 
                   \`values\`.value_integer, 
                   \`values\`.value_datetime, 
-                  \`values\`.value_double                       
+                  \`values\`.value_double,        
+                  \`values\`.value_boolean                       
                   FROM entities
                   LEFT JOIN entity_types ON entities.entity_type_id = entity_types.id
                   LEFT JOIN attributes ON attributes.entity_type_id = entity_types.id
@@ -38,38 +40,44 @@ class Entity {
 
     return data.records.map(
       ([
+        { longValue: id },
+        { stringValue: slug },
+        { stringValue: status },
         { longValue: entity_type_id },
-        { longValue: slug },
         { stringValue: entity_type_name },
         { stringValue: entity_type_slug },
-        { stringValue: entities_slug },
         { stringValue: attributes_name },
         { stringValue: attributes_type },
         { longValue: attributes_order },
+        { stringValue: attributes_custom_name },
         { stringValue: value_string },
         { stringValue: value_long_string },
         { longValue: value_integer },
         { stringValue: value_datetime },
         { stringValue: value_double },
+        { booleanValue: value_boolean },
       ]) => ({
-        entity_type_id,
+        id,
         slug,
+        status,
+        entity_type_id,
         entity_type_name,
         entity_type_slug,
-        entities_slug,
         attributes_name,
         attributes_type,
         attributes_order,
+        attributes_custom_name,
         value_string,
         value_long_string,
         value_integer,
         value_datetime,
         value_double,
+        value_boolean
       })
     );
   }
 
-  static async where({ entity_type_slug, entry, page }, queries) {
+  static async where({ entity_type_slug, entry, page, drafts }, queries) {
     const db = new DB();
     
     let generatedSQL;
@@ -108,19 +116,21 @@ class Entity {
         : 10;
     let offset = page ? limit * page : 0;
 
-    const sqlData = `SELECT entities.id, entity_types.id, entity_types.name, entity_types.slug, entities.slug, 
-                attributes.name, attributes.type, attributes.\`order\`,
+    const sqlData = `SELECT entities.id, entity_types.id, entity_types.name, entity_types.slug, entities.slug, entities.status,
+                attributes.name, attributes.type, attributes.\`order\`, attributes.custom_name,
                 \`values\`.value_string, 
                 \`values\`.value_long_string, 
                 \`values\`.value_integer, 
                 \`values\`.value_datetime, 
-                \`values\`.value_double                       
+                \`values\`.value_double,
+                \`values\`.value_boolean                  
                 FROM entities
                 LEFT JOIN entity_types ON entities.entity_type_id = entity_types.id
                 LEFT JOIN attributes ON attributes.entity_type_id = entity_types.id
                 LEFT JOIN \`values\` ON values.entity_id = entities.id AND values.attribute_id = attributes.id
                 WHERE 
-                    entity_types.slug = :entity_type_slug  
+                    entity_types.slug = :entity_type_slug
+                    ${drafts !== "true" ? "AND entities.status = 'published'" : "" /* No params, should be safe */}
                     ${generatedSQL ? `AND entities.id IN (${generatedSQL})` : ''}
                 ORDER BY entities.id, attributes.\`order\` ASC
                 ${entry && page ? `LIMIT ${limit} OFFSET ${offset}` : " "}
@@ -137,28 +147,34 @@ class Entity {
         { stringValue: entity_type_name },
         { stringValue: entity_type_slug },
         { stringValue: entities_slug },
+        { stringValue: entities_status },
         { stringValue: attributes_name },
         { stringValue: attributes_type },
         { longValue: attributes_order },
+        { stringValue: attributes_custom_name },
         { stringValue: value_string },
         { stringValue: value_long_string },
         { longValue: value_integer },
         { stringValue: value_datetime },
         { stringValue: value_double },
+        { booleanValue: value_boolean },
       ]) => ({
         id,
         entity_type_id,
         entity_type_name,
         entity_type_slug,
         entities_slug,
+        entities_status,
         attributes_name,
         attributes_type,
         attributes_order,
+        attributes_custom_name,
         value_string,
         value_long_string,
         value_integer,
         value_datetime,
         value_double,
+        value_boolean,
       })
     );
 
@@ -206,27 +222,39 @@ class Entity {
           { name: "entity_id", value: { longValue: lastInsertedEntityID } },
           { name: "attribute_id", value: { longValue: attributeId } },
           //Refactor to encapsulate type switch
+          //TODO: Refactor this logic inside AttributeTypeFactory
           {
             name: "value_string",
             value:
               attributeType == "text" ||
               attributeType == "image" ||
-              attributeType == "link"
+              attributeType == "link" ||
+              attributeType === "video"
                 ? { stringValue: entry[attributeName] }
                 : { isNull: true },
           },
           {
             name: "value_long_string",
             value:
-              attributeType == "textarea"
+              attributeType == "textarea" ||
+              attributeType === "gallery" ||
+              attributeType === "rich-text" ||
+              attributeType == "custom"
                 ? { stringValue: entry[attributeName] }
                 : { isNull: true },
           },
           {
             name: "value_double",
             value:
-              attributeType == "float"
+              attributeType == "float" && entry[attributeName].trim() != ''
                 ? { doubleValue: entry[attributeName] }
+                : { isNull: true },
+          },
+          {
+            name: "value_boolean",
+            value:
+              attributeType == "boolean"
+                ? { booleanValue: entry[attributeName] }
                 : { isNull: true },
           },
         ],
@@ -235,8 +263,8 @@ class Entity {
 
     //Insert Values by batch
     const insertValuesBatchSQL = `INSERT INTO \`values\`(entity_id, attribute_id,
-        value_string, value_long_string, value_double  
-      ) VALUES (:entity_id, :attribute_id, :value_string, :value_long_string, :value_double) 
+        value_string, value_long_string, value_double, value_boolean  
+      ) VALUES (:entity_id, :attribute_id, :value_string, :value_long_string, :value_double, :value_boolean) 
       `;
 
     await db.batchExecuteStatement(insertValuesBatchSQL, valueBatchParams);
@@ -244,6 +272,79 @@ class Entity {
     //TODO: end transaction
 
     return true;
+  }
+
+  // Almost the same as Entites.create but no values
+  static async createDraft({ entity_type_id }) {
+    const db = new DB();
+
+    //TODO: start transaction
+
+    //Insert Entity
+    const insertEntitiesSQL =
+      "INSERT into entities (slug, entity_type_id, status) VALUES ('', :entity_type_id, 'draft')";
+
+    await db.executeStatement(insertEntitiesSQL, [
+      { name: "entity_type_id", value: { longValue: entity_type_id } },
+    ]);
+
+    const {
+      records: [[{ longValue: lastInsertedEntityID }]],
+    } = await db.executeStatement("SELECT LAST_INSERT_ID()");
+    console.error(lastInsertedEntityID);
+
+    //Attribute Introspection
+    const entityIntrospectionSQL = `SELECT id, name, type FROM attributes 
+        WHERE entity_type_id = :entity_type_id ORDER by \`order\``;
+
+    const attributes = await db.executeStatement(entityIntrospectionSQL, [
+      { name: "entity_type_id", value: { longValue: entity_type_id } },
+    ]);
+
+    const valueBatchParams = attributes.records.reduce((collection, record) => {
+      const [
+        { longValue: attributeId },
+      ] = record;
+
+      return [
+        ...collection,
+        [
+          { name: "entity_id", value: { longValue: lastInsertedEntityID } },
+          { name: "attribute_id", value: { longValue: attributeId } },
+        ],
+      ];
+    }, []);
+
+    //Insert Values by batch
+    const insertValuesBatchSQL = `
+        INSERT INTO \`values\`(entity_id, attribute_id)
+        VALUES (:entity_id, :attribute_id)
+    `;
+
+    await db.batchExecuteStatement(insertValuesBatchSQL, valueBatchParams);
+
+    //TODO: end transaction
+
+    return { id: lastInsertedEntityID };
+  }
+
+  static async getDraft() {
+    const db = new DB();
+
+    const getDraftSql = "SELECT * FROM entities WHERE status = 'draft' LIMIT 1";
+
+    const { records } = await db.executeStatement(getDraftSql);
+
+    if (records.length === 0) throw new RecordNotFound();
+
+    const [
+        { longValue: id },
+        { stringValue: slug },
+        { longValue: entity_type_id },
+        { stringValue: status }
+    ] = records[0];
+
+    return { id, slug, entity_type_id, status }
   }
 
   static async delete({ id }) {
@@ -261,11 +362,23 @@ class Entity {
     return true;
   }
   //Work in progress
-  static async update({ entries, entity_type_slug, entity_id }) {
+  static async update({ slug, status, entries, entity_type_slug, entity_id }) {
     const db = new DB();
     // entity_type_slug will always be a string
     // entity_id can be a string or a number
     // check the entity_id weather it consists numbers only in which return true, otherwise it will return false
+
+    const updateEntitySql = `UPDATE entities SET 
+                                slug = :slug,
+                                status = :status
+                            WHERE 
+                                id = :id`;
+
+    await db.executeStatement(updateEntitySql, [
+      { name: "slug", value: { stringValue: slug } },
+      { name: "status", value: { stringValue: status } },
+      { name: "id", value: { longValue: entity_id } },
+    ]);
 
     const { propertyType, conditionType } = isNumber(entity_id)
       ? { propertyType: "longValue", conditionType: "entities.id" }
@@ -306,6 +419,7 @@ class Entity {
             value:
               (attributeType == "text" ||
                 attributeType == "image" ||
+                attributeType == "video" ||
                 attributeType == "link") &&
               entries[attributeName]
                 ? { stringValue: entries[attributeName] }
@@ -314,7 +428,11 @@ class Entity {
           {
             name: "value_long_string",
             value:
-              attributeType == "textarea" && entries[attributeName]
+              (attributeType == "textarea" ||
+                attributeType === "gallery" ||
+                attributeType === "rich-text" ||
+                attributeType === "custom") && 
+              entries[attributeName]
                 ? { stringValue: entries[attributeName] }
                 : { isNull: true },
           },
@@ -323,6 +441,13 @@ class Entity {
             value:
               attributeType == "float" && entries[attributeName]
                 ? { doubleValue: entries[attributeName] }
+                : { isNull: true },
+          },
+          {
+            name: "value_boolean",
+            value:
+              attributeType == "boolean"
+                ? { booleanValue: entries[attributeName] }
                 : { isNull: true },
           },
         ],
@@ -360,8 +485,8 @@ class Entity {
 
     if (nonExistingVal.length) {
       const insertValuesBatchSQL = `INSERT INTO \`values\`(entity_id, attribute_id,
-      value_string, value_long_string, value_double  
-    ) VALUES (:entity_id, :attribute_id, :value_string, :value_long_string, :value_double) 
+      value_string, value_long_string, value_double, value_boolean  
+    ) VALUES (:entity_id, :attribute_id, :value_string, :value_long_string, :value_double, :value_boolean) 
     `;
 
       await db.batchExecuteStatement(insertValuesBatchSQL, nonExistingVal);
@@ -372,7 +497,8 @@ class Entity {
     const updateValuesBatchSQL = `UPDATE \`values\` SET 
     value_string = :value_string, 
     value_long_string = :value_long_string, 
-    value_double = :value_double 
+    value_double = :value_double, 
+    value_boolean = :value_boolean
     WHERE entity_id = :entity_id AND attribute_id = :attribute_id
     `;
 

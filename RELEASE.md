@@ -1,3 +1,41 @@
+# 3.7.0
+* You can now save content as draft first, then publish later on.
+* Fixed bug involving deletion of entries.
+* Introduced singleton-related bug fixes.
+
+# 3.6.2
+* Add default value for empty galleries
+
+# 3.6.1
+* Add anchor links to Rich Text Attribute Type
+
+
+# 3.6.0
+* Added Boolean attribute type
+* Added Video attribute type
+* Added Custom Attribute types feature via plugins.
+* Can now use exported classes of plugins using the `plugin()` function
+* Added Singleton variant for Content Type.
+* Added Rich Text Attribute type
+
+# 3.5.1
+* Removed fields validation for now, will roll-out a more robust field validation mechanism in the future.
+
+# 3.5.0
+* The installation process is now easier 
+* Added download to CSV feature
+
+# 3.4.0
+* Added user management systems
+* Added sign up route
+* Added sidebar icons
+* Added Gallery attribute
+* Fixed capabilities for Administrators and Editors
+* Login now returns JWT if the host is not from the CMS
+* Plugins can now have sub items on the sidebar
+* Users can now update their profile
+
+
 # 3.3.0
 * Allow plugins to have migrations 
 

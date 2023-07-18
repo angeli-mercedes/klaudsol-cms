@@ -17,17 +17,18 @@ import AppButtonSpinner from "@/components/klaudsolcms/AppButtonSpinner";
 import AppInfoModal from "@/components/klaudsolcms/modals/AppInfoModal";
 
 /** react-icons */
-import { FaCheck, FaTrash } from "react-icons/fa";
+import { FaCheck, FaPencilRuler, FaTrash } from "react-icons/fa";
 import { MdModeEditOutline } from "react-icons/md";
 import { VscListSelection } from "react-icons/vsc";
 import { Col } from "react-bootstrap";
 import { Formik, Form, Field } from "formik";
 import ContentManagerLayout from "components/layouts/ContentManagerLayout";
 import { DEFAULT_SKELETON_ROW_COUNT, writeContents } from "lib/Constants";
-import { getAllFiles, getNonFiles, getBody } from "@/lib/s3FormController";
+import { getAllFiles, getNonFiles, extractFiles } from "@/lib/s3FormController";
 import { uploadFilesToUrl } from "@/backend/data_access/S3";
 import AdminRenderer from "@/components/renderers/admin/AdminRenderer";
 import { redirectToManagerEntitySlug } from "@/components/klaudsolcms/routers/routersRedirect";
+import classname from "classnames";
 
 import {
   initialState,
@@ -38,6 +39,7 @@ import {
   LOADING,
   REFRESH,
   SAVING,
+  DRAFTING,
   DELETING,
   CLEANUP,
   SET_SHOW,
@@ -49,6 +51,9 @@ import {
   SET_ENTITY_TYPE_ID,
   SET_ALL_VALIDATES
 } from "@/lib/actions";
+import GeneralHoverTooltip from "@/components/elements/tooltips/GeneralHoverTooltip";
+import { RiQuestionLine } from "react-icons/ri";
+import { slugTooltipText } from "@/constants";
 
 export default function Type({ cache }) {
   const router = useRouter();
@@ -58,13 +63,14 @@ export default function Type({ cache }) {
   const { entity_type_slug, id } = router.query;
   const [state, dispatch] = useReducer(entityReducer, initialState);
   const formRef = useRef();
+  const statusRef = useRef();
 
   /*** Entity Types List ***/
   useEffect(() => {
     (async () => {
       try {
         dispatch({ type: LOADING });
-        const valuesRaw = await slsFetch(`/api/${entity_type_slug}/${id}`);
+        const valuesRaw = await slsFetch(`/api/${entity_type_slug}/${id}?drafts=true`);
         const values = await valuesRaw.json();
 
         const entries = {...Object.keys(values.metadata.attributes).reduce((a, v) => ({ ...a, [v]: ''}), {}), ...values.data};
@@ -118,16 +124,25 @@ export default function Type({ cache }) {
     [entity_type_slug, id]
   );
 
-  const getFormikInitialVals = () => {
-    const { slug, id, ...initialValues } = state.values;
-    return initialValues;
-  };
+  const onPublishSubmit = (e) => {
+    statusRef.current = "published";
 
-  const getFilesToDelete = (values) => {
-    const files = Object.keys(values).filter((value) => values[value] instanceof File);
-    const keys = files.map((file) => state.values[file].key);
-    
-    return keys;
+    dispatch({ type: SAVING });
+
+    onSubmit(e);
+  }
+
+  const onDraftSubmit = (e) => {
+    statusRef.current = "draft";
+
+    dispatch({ type: DRAFTING });
+
+    onSubmit(e)
+  }
+
+  const getFormikInitialVals = () => {
+    const { id, status, ...initialValues } = state.values;
+    return initialValues;
   };
 
   const formikParams = {
@@ -136,17 +151,16 @@ export default function Type({ cache }) {
     onSubmit: (values) => {
       (async () => {
         try {
-          dispatch({ type: SAVING });
+          console.error(values);
 
-          const { files, data, fileNames } = await getBody(values);
-          const toDelete = getFilesToDelete(values);
+          const { data, fileNames, files } = await extractFiles(values);
 
           const entry = {
             ...data,
             fileNames,
-            toDelete,
             entity_type_slug,
             entity_id: id,
+            status: statusRef.current
           };
 
           const response = await slsFetch(`/api/${entity_type_slug}/${id}`, {
@@ -223,6 +237,18 @@ export default function Type({ cache }) {
                     <Formik {...formikParams}>
                       {(props) => (
                         <Form>
+                          <div className="d-flex flex-row mx-0 my-0 px-0 py-0"> 
+                          <p className="general-input-title-slug"> Slug </p> 
+                          <GeneralHoverTooltip 
+                            icon={<RiQuestionLine className="general-input-title-slug-icon"/>}
+                            className="general-table-header-slug"
+                            tooltipText={slugTooltipText}
+                            position="left"
+                          /> 
+                          </div>
+                          <div>
+                            <Field name="slug" type="text" className="general-input-text" />
+                          </div>
                           {Object.entries(state.attributes)
                             .sort(sortByOrderAsc)
                             .map(([attributeName, attribute]) => {
@@ -234,7 +260,9 @@ export default function Type({ cache }) {
                                     touched={props.touched}
                                     type={attribute.type}
                                     name={attributeName}
+                                    customName={attribute?.custom_name ?? ''}
                                     disabled={!capabilities.includes(writeContents)}
+                                    id={id}
                                   />
                                 </div>
                               );
@@ -295,9 +323,15 @@ export default function Type({ cache }) {
                 className="general-button-cancel"
               />
               <AppButtonLg
+                title="Draft"
+                icon={state.isDrafting ? <AppButtonSpinner /> : <FaPencilRuler className="general-button-icon"/>}
+                onClick={!state.isDrafting ? onDraftSubmit : null}
+                className="general-button-draft"
+              />
+              <AppButtonLg
                 title={state.isSaving ? "Saving" : "Save"}
                 icon={state.isSaving ? <AppButtonSpinner /> : <FaCheck className="general-button-icon"/>}
-                onClick={!state.isSaving ? onSubmit : null}
+                onClick={!state.isSaving ? onPublishSubmit : null}
                 className="general-button-save"
               /></>}
             </div>}

@@ -40,19 +40,25 @@ import { readContents, writeContents } from '@/lib/Constants';
 export default withSession(handleRequests({ get, post }));
 
 async function get(req, res) {
+    await assertUserCan(readContents, req);
+
     const {
         entity_type_slug,
         entry,
         page,
         sort: sortValue,
+        drafts,
         ...queries
     } = req.query;
 
     const rawData = await Entity.where(
-        { entity_type_slug, entry, page },
-        queries
+        { entity_type_slug, entry, page, drafts },
+        queries,
     );
     const rawEntityType = await EntityType.find({ slug: entity_type_slug });
+    if (rawEntityType.length === 0) return res.status(NOT_FOUND).json({});
+
+    const isSingleType = (rawEntityType[0].entity_type_variant === 'singleton');
 
     const initialFormat = {
         indexedData: {},
@@ -68,8 +74,11 @@ async function get(req, res) {
                     ...(!collection.indexedData[item.id]?.slug && {
                         slug: item.entities_slug,
                     }),
-                    ...(!collection.indexedData[item.id]?.[item.attributes_name] && {
-                        [item.attributes_name]: resolveValue(item),
+                    ...(!collection.indexedData[item.id]?.status && {
+                        status: item.entities_status,
+                    }),
+                    ...({
+                        [item.attributes_name]: resolveValue(item) ?? null,
                     }),
                 },
             },
@@ -89,10 +98,12 @@ async function get(req, res) {
                     [item.attribute_name]: {
                         type: item.attribute_type,
                         order: item.attribute_order,
+                        ...(item?.attribute_custom_name && { custom_name: item.attribute_custom_name })
                     },
                 }),
             },
             entity_type_id: item.entity_type_id,
+            variant: item.entity_type_variant,
             total_rows: rawData.total_rows,
         };
     }, initialMetadata);
@@ -101,7 +112,7 @@ async function get(req, res) {
     if (sortValue) data = sortData(dataTemp.indexedData, sortValue);
 
     const output = {
-        data: data ? { ...data } : dataTemp.indexedData,
+        data: isSingleType ? Object.values(dataTemp.indexedData)[0] : data ? { ...data } : dataTemp.indexedData,
         metadata: metadata,
     };
 
@@ -113,14 +124,9 @@ async function get(req, res) {
 }
 
 async function post(req, res) {
-    await assert({
-        loggedIn: true,
-    }, req);
+    await assertUserCan(writeContents, req);
 
-    await assertUserCan(readContents, req) &&
-        await assertUserCan(writeContents, req);
-
-    const { fileNames, ...entry } = req.body;
+    const { fileNames = [], ...entry } = req.body;
     await Entity.create(entry);
 
     const presignedUrls = fileNames.length > 0 && await generatePresignedUrls(fileNames);

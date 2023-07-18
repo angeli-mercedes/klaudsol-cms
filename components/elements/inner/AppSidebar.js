@@ -1,5 +1,5 @@
 import { FaFeatherAlt, FaRegUser, FaPlus } from 'react-icons/fa';
-import { HiOutlineUser, HiOutlineUserGroup } from 'react-icons/hi';
+import { HiOutlineUser, HiOutlineUserGroup, HiUserAdd } from 'react-icons/hi';
 import { BiPen, BiPlug } from 'react-icons/bi';
 import * as Icons from "react-icons/bi";
 import { RiSettings3Line } from 'react-icons/ri';
@@ -17,7 +17,7 @@ import CollapsedSidebar from './sidebar/CollapsedSidebar';
 import { SET_COLLAPSE } from '@/lib/actions';
 import RootContext from '@/components/contexts/RootContext';
 import { useCapabilities } from '@/components/hooks';
-import { writeSettings, writeContentTypes, readUsers,  readGroups, writeContents } from "@/lib/Constants";
+import { writeSettings, writeContentTypes, readUsers,  readGroups, writeContents, readPendingUsers } from "@/lib/Constants";
 import { loadEntityTypes } from '@/components/reducers/actions';
 import pluginMenus from '@/plugin-menus.json';
 
@@ -31,12 +31,13 @@ const AppSidebar = () => {
   const cache = useContext(CacheContext);
   const { firstName = null, lastName = null, defaultEntityType = null } = cache ?? {};
   const [isCollectionTypeBodyVisible, setCollectionTypeBodyVisible] = useState(false);
+  const [saving, setSaving] = useState(false);
 
   const onModalSubmit = () => {
     if (formRef.current) {
       formRef.current.handleSubmit();
-      setCollectionTypeBodyVisible(false);
     }
+
   };
 
   const pluginMenuLinks = pluginMenus.menus.map(plugin => {
@@ -44,19 +45,40 @@ const AppSidebar = () => {
     return capabilities.includes(plugin.capability) ? {
       title: plugin.title,
       path: plugin.link,
-      icon: <PluginMenuIcon className='sidebar_button_icon'/>
+      icon: <PluginMenuIcon className='sidebar_button_icon'/>,
+      ...(plugin?.multiple && { multiple: plugin.multiple }),
+      ...(plugin?.subItems && {
+        subItems: plugin.subItems.map((subItem) => {
+          const SubItemIcon = Icons[subItem.icon] ?? Icons.BiChevronRight;
+
+          return capabilities.includes(subItem.capability) ?
+              {
+                  subTitle: subItem.title,
+                  subIcon: <SubItemIcon className='sidebar_button_icon'/>,
+                  subPath: subItem.link
+              } : null
+        }).filter((subItem) => subItem)
+      })
     } : null
     ;
   }).filter(x => x);
 
-  const entityTypeLinks = (capabilities.includes(writeContents) ? rootState.entityTypes.map(type => ({
+  const entityTypeLinks = (capabilities.includes(writeContents) ? rootState.entityTypes.map(type => {
+    const Icon = Icons[type.entity_type_icon ?? "BiPen"];
+
+    return {
       title: type.entity_type_name,
       path: `/admin/content-manager/${type.entity_type_slug}`,
-      icon: <BiPen className='sidebar_button_icon'/>
-    })) : 
+      icon: <Icon className='sidebar_button_icon'/>
+    }}) : 
     []
   );
-  
+
+  // These will be used multiple times
+  const canReadUsers = capabilities.includes(readUsers);
+  const canReadPendingUsers = capabilities.includes(readPendingUsers);
+  const canReadGroups = capabilities.includes(readGroups);
+
   const sidebarButtons = [
     (capabilities.includes(writeContentTypes) && {
       multiple: true,
@@ -77,6 +99,27 @@ const AppSidebar = () => {
       }
     ]
     }),
+    ((canReadUsers || canReadPendingUsers || canReadGroups) && {
+      multiple: true,
+      title: "Admin",
+      path: "/admin",
+      icon: <AiOutlineLock className='sidebar_button_icon'/>,
+      subItems:[canReadUsers ?
+                {subTitle:"Users", 
+                 subIcon:<HiOutlineUser className='sidebar_button_icon'/>,
+                 subPath:"/admin/users" 
+                }: null,
+                canReadPendingUsers ?
+                {subTitle:"Pending Users", 
+                 subIcon:<HiUserAdd className='sidebar_button_icon'/>,
+                 subPath:"/admin/users/pending" 
+                }: null,
+                false && canReadGroups ? 
+                {subTitle:"Groups",
+                 subIcon:<HiOutlineUserGroup className='sidebar_button_icon'/>,
+                 subPath:"/admin/groups"
+                } : null].filter(item => item)
+    }),
     {
       title: "Profile",
       path: "/admin/me",
@@ -87,22 +130,6 @@ const AppSidebar = () => {
       path: "/admin/settings",
       icon: <RiSettings3Line className='sidebar_button_icon'/>
     }:null),
-    (false ? {
-      multiple: true,
-      title: "Admin",
-      subItems:[capabilities.includes(readUsers) ?
-                {subTitle:"Users", 
-                 subIcon:<HiOutlineUser className='sidebar_button_icon'/>,
-                 subPath:"/admin/users" 
-                }: null,
-
-                capabilities.includes(readGroups) ? 
-                {subTitle:"Groups",
-                 subIcon:<HiOutlineUserGroup className='sidebar_button_icon'/>,
-                 subPath:"/admin/groups"
-                } : null].filter(item => item),
-      icon: <AiOutlineLock className='sidebar_button_icon'/>
-    }:null)
   ].filter(item => item);
 
     useEffect(() => { 
@@ -141,10 +168,11 @@ const AppSidebar = () => {
         show={isCollectionTypeBodyVisible}
         onClose={() => setCollectionTypeBodyVisible(false)}
         onClick={onModalSubmit}
-        modalTitle="Create a collection type"
-        buttonTitle="Continue"
+        modalTitle="Create a Content Type"
+        buttonTitle="Save"
+        isLoading={saving}
       >
-        <CollectionTypeBody formRef={formRef} />
+        <CollectionTypeBody formRef={formRef} setSaving={setSaving} hide={() => setCollectionTypeBodyVisible(false)} />
       </AppModal>
     </>
   )

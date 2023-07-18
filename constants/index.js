@@ -1,10 +1,29 @@
 export const inputValues = [
   { value: "text", option: "Text" },
   { value: "textarea", option: "Text Area" },
+  { value: "rich-text", option: "Rich Text" },
   { value: "link", option: "Link" },
   { value: "image", option: "Image" },
+  { value: "gallery", option: "Gallery" },
   { value: "float", option: "Number" },
+  { value: "video", option: "Video" },
+  { value: "boolean", option: "Boolean" },
+  { value: "custom", option: "Custom" }
 ];
+
+export const COLLECTION_ENTITY_TYPE_VARIANT = 'collection';
+export const SINGLETON_ENTITY_TYPE_VARIANT = 'singleton';
+export const entityTypeVariants = [
+  { value: COLLECTION_ENTITY_TYPE_VARIANT, option: "Collection" },
+  { value: SINGLETON_ENTITY_TYPE_VARIANT, option: "Singleton" },
+];
+
+export const entityTypeVariantsEnum = {
+  collection: "collection",
+  singleton: "singleton"
+};
+
+export const defaultEntityTypeVariant = 'collection';
 
 export const defaultLogo = {
   link: "/logo-180x180.png",

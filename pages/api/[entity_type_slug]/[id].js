@@ -35,14 +35,16 @@ import { setCORSHeaders, handleRequests } from "@klaudsol/commons/lib/API";
 import { createHash } from "@/lib/Hash";
 import { assert, assertUserCan } from "@klaudsol/commons/lib/Permissions";
 import { readContents, writeContents } from "@/lib/Constants";
+import RecordNotFound from '@klaudsol/commons/errors/RecordNotFound';
 
 export default withSession(handleRequests({ get, del, put }));
 
 async function get(req, res) {
     await assertUserCan(readContents, req);
 
-    const { entity_type_slug, id: slug } = req.query;
+    const { entity_type_slug, id: slug, drafts } = req.query;
     const rawData = await Entity.findBySlugOrId({ entity_type_slug, slug });
+    if (rawData.length === 0) return res.status(NOT_FOUND).json({});
 
     const initialFormat = {
         data: {},
@@ -51,6 +53,10 @@ async function get(req, res) {
         },
     };
 
+    if (drafts !== "true" && rawData[0].status === 'draft') {
+       throw new RecordNotFound();
+    }
+
     //Priority is the first entry in the collection, to make the
     //system more stable. Suceeding entries that are inconsistent are discarded.
     const output = rawData.reduce((collection, item) => {
@@ -58,9 +64,10 @@ async function get(req, res) {
             data: {
                 ...collection.data,
                 ...(!collection.data.id && { id: item.id }),
-                ...(!collection.data.slug && { slug: item.entities_slug }),
-                ...(!collection.data[item.attributes_name] && {
-                    [item.attributes_name]: resolveValue(item),
+                ...(!collection.data.slug && { slug: item.slug }),
+                ...(!collection.data.status && { status: item.status }),
+                ...({
+                    [item.attributes_name]: resolveValue(item) ?? null
                 }),
             },
             metadata: {
@@ -75,6 +82,7 @@ async function get(req, res) {
                         [item.attributes_name]: {
                             type: item.attributes_type,
                             order: item.attributes_order,
+                            ...(item?.attributes_custom_name && { custom_name: item.attributes_custom_name })
                         },
                     }),
                 },
@@ -101,7 +109,7 @@ async function del(req, res) {
     const { entity_type_slug, id: slug } = req.query;
     const entity = await Entity.findBySlugOrId({ entity_type_slug, slug });
     const imageNames = entity.flatMap((item) =>
-        item.attributes_type === "image" ? item.value_string : []
+        item.attributes_type === "image" && item.value_string ? item.value_string : []
     );
 
     if (imageNames.length > 0) await deleteFilesFromBucket(imageNames);
@@ -121,12 +129,12 @@ async function put(req, res) {
     (await assertUserCan(readContents, req)) &&
       (await assertUserCan(writeContents, req));
 
-    const { fileNames, toDelete, ...body } = req.body;
-    const { entity_id, entity_type_slug, ...entries } = body
-    await Entity.update({ entries, entity_type_slug, entity_id });
+    const { entity_type_slug, id: entity_id } = req.query;
+    const { fileNames, slug, status, ...entries } = req.body;
 
-    //if (toDelete.length > 0) deleteFilesFromBucket(toDelete);
+    await Entity.update({ slug, status, entries, entity_type_slug, entity_id });
+
     const presignedUrls = fileNames.length > 0 && await generatePresignedUrls(fileNames);
 
-    res.status(OK).json({ message: "Successfully created a new entry", presignedUrls });
+    res.status(OK).json({ message: "Successfully updated the entry.", presignedUrls });
 }

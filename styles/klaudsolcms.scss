@@ -80,6 +80,12 @@
 }
 
 .sidebar_buttons,
+.sidebar_buttons--link,
+.sidebar_buttons_active {
+    color: #000;
+}
+
+.sidebar_buttons,
 .sidebar_buttons_active
  {
     position: relative;
@@ -91,8 +97,6 @@
     text-align: left;
     padding-left: 15px;
     display: block;
-    text-decoration: none;
-    color: #000;
     cursor: pointer;
     
     .arrowbutton{
@@ -107,6 +111,11 @@
     }
 }
 
+.sidebar_buttons--link,
+.sidebar_buttons_active--link {
+    text-decoration: none;
+}
+
 .errorMessage{
  margin-top: 5vh;
 }
@@ -117,7 +126,29 @@
     border: 1px solid lightgray;
   }
 
-.sidebar_buttons:hover {
+.general-input-checkbox {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    margin-top: 10px;
+    margin-left: 4px;
+
+    > * {
+        margin-right: 10px;
+    }
+
+    &__checkbox {
+        transform: scale(1.5);
+        accent-color: #455a64;
+    }
+
+    &__text {
+        font-size: 16px;
+    }
+}
+
+.sidebar_buttons:hover,
+.sidebar_buttons--link:hover {
     background-color: #b0bec5;
     text-decoration: none;
     color: #000;
@@ -125,7 +156,9 @@
 }
 
 .sidebar_buttons_active,
-.sidebar_buttons_active:hover {
+.sidebar_buttons_active:hover,
+.sidebar_buttons_active--link,
+.sidebar_buttons_active--link:hover {
     background-color: #455a64;
     color: #eceff1;
 }
@@ -138,6 +171,7 @@
 
 .sub_button{
     padding-left: 40px;
+    text-decoration: none;
 }
 
 .sidebar_footer {
@@ -574,6 +608,17 @@ $onFocus: #323C4E;
 
 /** BACK BUTTON **/
 
+.btn_text {
+    all: unset;
+    color: #455a64;
+    size: 12px;
+
+    &:hover {
+        color: #b0bec5;
+        transition: 0.1s;
+    }
+}
+
 .btn_back {
     border: transparent;
     background-color: transparent;
@@ -750,24 +795,7 @@ $onFocus: #323C4E;
     height: 100%;
     border: 1px solid #b0bec5;
     border-radius: 5px;
-
-    &::-webkit-scrollbar-track
-    {
-        background-color: #fff;
-    }
-
-    &::-webkit-scrollbar
-    {
-        width: 5px;
-        height: 5px;
-        background-color: #fff;
-    }
-
-    &::-webkit-scrollbar-thumb
-    {
-        background-color: lightgray;
-        border-radius: 10px
-    }
+    margin-bottom: 20px;
 }
 
 #table_general, #table_skeleton {
@@ -817,41 +845,67 @@ $onFocus: #323C4E;
 
 #table_general td:first-child {
     min-width: 50px;
-    max-width: 50px;
+    max-width: 100%;
 }
 
 #table_general th {
   color: black;
 }
 
+#table_general td.table--expand_first,
+#table_general th.table--expand_first {
+    min-width: none;
+    max-width: none;
+}
+
+#table_general td.table--shrink_cell,
+#table_general th.table--shrink_cell {
+    min-width: 50px;
+    max-width: 50px;
+}
+
+#table_general td.table--center_cell,
+#table_general th.table--center_cell {
+    text-align: center;
+}
+/** 
+=================================================================
+                    USER TABLE STYLES
+=================================================================
+**/
+
+.users {
+    &__pending_button {
+        font-size: 20px;
+        padding: 0 5px;
+
+        &--approve {
+            &:hover {
+                border-color: #455a64;
+            }
+        }
+
+        &--reject {
+            color: #7C0A02;
+
+            &:hover {
+                border-color: #7C0A02;
+            }
+        }
+
+        &:hover {
+            transition: 0.2s;
+        }
+    }
+}
+
 /**
 ===============================================
             CARD VIEW STYLES
 ===============================================
-
 **/
 
 .card {
-    &__container, &__data {
-        &::-webkit-scrollbar-track
-        {
-            background-color: #fff;
-        }
-
-        &::-webkit-scrollbar
-        {
-            width: 5px;
-            height: 5px;
-            background-color: #fff;
-        }
-
-        &::-webkit-scrollbar-thumb
-        {
-            background-color: lightgray;
-            border-radius: 10px
-        }
-    }
-
     &__container {
         display: grid;
         padding: 25px;
@@ -861,6 +915,10 @@ $onFocus: #323C4E;
 
         width: 100%;
         min-height: 100%;
+
+        &--attribute {
+            padding: 0 0 7px 0;
+        }
     }
 
     &__item {
@@ -897,12 +955,119 @@ $onFocus: #323C4E;
         text-overflow: ellipsis;
         white-space: nowrap;
 
-        &--container {
+        // I accidentally typed in --container instead of -container.
+        // "--" should be reserved for modifiers
+        // Some block of code might be relying on --container so I decided
+        // to keep it.
+        &--container, &-container {
             height: 40px; // grid-auto-rows - image-container height
             display: flex;
             justify-content: center;
             align-items: center;
         }
+    }
+
+    &__side-button {
+        all: unset;
+
+        &-container {
+            position: absolute;
+            top: 0;
+            right: 5px;
+            z-index: 1000;
+
+            display: flex;
+            flex-direction: column;
+
+            font-size: 24px;
+            color: #455a64;
+        }
+
+        &--delete {
+            color: #800000;
+
+            &:hover {
+                color: #FF0000;
+                transition: 0.2s;
+            }
+        }
+    }
+}
+
+/**
+===============================================
+            IMAGE BOX STYLES
+===============================================
+
+**/
+
+.image-box {
+    color: lightgray;
+    border: 5px dashed lightgray;
+    border-radius: 15px;
+    margin: 15px 0;
+    padding: 20px;
+    text-align: center;
+    cursor: default;
+
+    &__icon {
+        font-size: 400px;
+    }
+
+    &__text {
+        font-size: 24px;
+    }
+
+    &--error {
+        color: red;
+        border: 5px dashed red;
+    }
+}
+
+/**
+===============================================
+            ICON LIST STYLES
+===============================================
+**/
+
+.icon_list {
+    &__container {
+        height: 500px;
+        overflow-y: scroll;
+    }
+
+    &__button {
+        all: unset;
+        padding: 12px;
+        border-radius: 5px;
+
+        &:hover, &--current {
+            color: #fff;
+            background-color: #455a64;
+        }
+    }
+
+    &__item {
+        font-size: 32px;
+    }
+}
+
+/**
+===============================================
+            GROUPS GRID STYLES
+===============================================
+**/
+
+.groups {
+    &__container {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(400px, 2fr));
+        gap: 10px;
+    }
+
+    &__description {
+        font-size: 12px;
+        margin-left: 32px;
     }
 }
 
@@ -1233,3 +1398,12 @@ $onFocus: #323C4E;
     }
 }
 
+.custom-attribute {
+    padding: 10px;
+
+    &__title {
+        all: unset;
+        font-size: 13px;
+        font-weight: 590;
+    }
+}

@@ -4,17 +4,27 @@ import Link from "next/link";
 import GeneralHoverTooltip from "components/elements/tooltips/GeneralHoverTooltip";
 import { useCapabilities } from '@/components/hooks';
 import { readContents } from "@/lib/Constants";
+import { useEffect } from 'react';
+import AttributeTypeFactory from '@/components/attribute_types/AttributeTypeFactory';
 
-const AppContentManagerTable = ({ columns, entries, entity_type_slug }) => {
+const ValueComponent = ({entry, attribute, metadata}) => {
+
+
+  const attributeMetadata = metadata.attributes?.[attribute];
+  const attributeTypeInstance = AttributeTypeFactory.create({data: entry[attribute], metadata: attributeMetadata});
+
+  if(attributeTypeInstance) {
+    //new AttributeType mechanism
+    const Component = attributeTypeInstance.readOnlyComponent();
+    return (<Component {...attributeTypeInstance.props()} />);
+
+  } 
+}
+
+const AppContentManagerTable = ({ columns, entries, entity_type_slug, data, metadata }) => {
 
   const capabilities = useCapabilities();
-  // If entry is an object, chances are its a file uploaded to S3.
-  // Files uploaded to S3 should have an originalname property
-  const checkEntryIfObject = (entry, accessor) => {
-    if (typeof entry[accessor] === "object") return entry[accessor]?.name;
-    return entry[accessor];
-  };
-
+  
   return (
     <div id="table_general_main">
       <table id="table_general">
@@ -49,11 +59,15 @@ const AppContentManagerTable = ({ columns, entries, entity_type_slug }) => {
                   key={index}
                   disabled={!capabilities.includes(readContents)}                  
                 >
+<<<<<<< HEAD
                   <td key={index}>
                     <div className="cell-column">
                      {checkEntryIfObject(entry, col.accessor)}
                     </div>
                     </td>
+=======
+                  <td key={index}><ValueComponent entry={entry} attribute={col.accessor} metadata={metadata}/></td>
+>>>>>>> d09eddad4bf000b039bc42101c864288196ce487
                 </Link>
               ))}         
             </tr>
